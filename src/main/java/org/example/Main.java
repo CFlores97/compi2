@@ -14,9 +14,18 @@ package org.example;
 * */
 
 
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.RuleContext;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.List;
+import utils.TreeUtils;
+import utils.MinicErrorListener;
 
 public class Main {
     public static void main(String[] args) {
@@ -28,11 +37,47 @@ public class Main {
 
             try {
 
-                //Archivo validado
+                // Archivo validado
                 File sanitizedFile = validateFile(userInput);
 
-                // Charstream a mandar al lexer
-                String charStream = convertToCharStream(sanitizedFile);
+                // texto extraido del archivo .mc
+                String textCode = convertToCharStream(sanitizedFile);
+
+                // Inicializa el Charstream
+                CharStream input = CharStreams.fromString(textCode);
+
+                // Mandarlo al lexer
+                MiniCLexer lexer = new MiniCLexer(input);
+
+                // agrega error personalizado a lexer
+                lexer.removeErrorListeners();
+                lexer.addErrorListener(new MinicErrorListener());
+
+                // Convierte en tokens para parser
+                CommonTokenStream tokens = new CommonTokenStream(lexer);
+
+                // Mandarlo al parser
+                MiniCParser parser = new MiniCParser(tokens);
+
+                // agrega error personalizado a parser
+                parser.removeErrorListeners();
+                parser.addErrorListener(new MinicErrorListener());
+
+                // Arbol de parseo
+                parser.setBuildParseTree(true);
+
+                // Aqui llama a la regla inicial
+                RuleContext tree = parser.program();
+
+                // Source - https://stackoverflow.com/a/50068645
+                // Posted by GRosenberg, modified by community. See post 'Timeline' for change history
+                // Retrieved 2026-05-13, License - CC BY-SA 4.0
+                List<String> ruleNamesList = Arrays.asList(parser.getRuleNames());
+                String prettyTree = TreeUtils.toPrettyTree(tree, ruleNamesList);
+
+                // Impresion del arbol
+                System.out.println("Parse Tree: \n" + prettyTree);
+
 
             } catch (Exception e) {
                 System.out.println("Ocurrio un error al validar archivo: " + e.getMessage());
