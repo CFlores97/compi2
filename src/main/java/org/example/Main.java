@@ -9,7 +9,7 @@ package org.example;
 6. Pasar los tokens del lexer al parser.
 7. Ejecutar la regla inicial de la gramática, normalmente program.
 8. Mostrar si hubo errores o si el análisis fue exitoso.
-9. Opcionalmente imprimir tokens o parse tree.
+9. imprimir parse tree.
 *
 * */
 
@@ -24,8 +24,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
+
 import utils.TreeUtils;
 import utils.MinicErrorListener;
+import org.example.antlr.MiniCLexer;
+import org.example.antlr.MiniCParser;
 
 public class Main {
     public static void main(String[] args) {
@@ -41,17 +44,20 @@ public class Main {
                 File sanitizedFile = validateFile(userInput);
 
                 // texto extraido del archivo .mc
-                String textCode = convertToCharStream(sanitizedFile);
+                String textCode = extractMCFileText(sanitizedFile);
 
                 // Inicializa el Charstream
                 CharStream input = CharStreams.fromString(textCode);
+
+                //Instancia compartida de error listener
+                MinicErrorListener errorListener = new MinicErrorListener();
 
                 // Mandarlo al lexer
                 MiniCLexer lexer = new MiniCLexer(input);
 
                 // agrega error personalizado a lexer
                 lexer.removeErrorListeners();
-                lexer.addErrorListener(new MinicErrorListener());
+                lexer.addErrorListener(errorListener);
 
                 // Convierte en tokens para parser
                 CommonTokenStream tokens = new CommonTokenStream(lexer);
@@ -61,7 +67,7 @@ public class Main {
 
                 // agrega error personalizado a parser
                 parser.removeErrorListeners();
-                parser.addErrorListener(new MinicErrorListener());
+                parser.addErrorListener(errorListener);
 
                 // Arbol de parseo
                 parser.setBuildParseTree(true);
@@ -69,27 +75,34 @@ public class Main {
                 // Aqui llama a la regla inicial
                 RuleContext tree = parser.program();
 
-                // Source - https://stackoverflow.com/a/50068645
-                // Posted by GRosenberg, modified by community. See post 'Timeline' for change history
-                // Retrieved 2026-05-13, License - CC BY-SA 4.0
-                List<String> ruleNamesList = Arrays.asList(parser.getRuleNames());
-                String prettyTree = TreeUtils.toPrettyTree(tree, ruleNamesList);
+                if (errorListener.hasErrors()) {
+                    System.err.println("El analisis termino con errores.");
 
-                // Impresion del arbol
-                System.out.println("Parse Tree: \n" + prettyTree);
+                } else {
+                    System.out.println("Analisis xitoso");
+
+                    // Source - https://stackoverflow.com/a/50068645
+                    // Posted by GRosenberg, modified by community. See post 'Timeline' for change history
+                    // Retrieved 2026-05-13, License - CC BY-SA 4.0
+                    List<String> ruleNamesList = Arrays.asList(parser.getRuleNames());
+                    String prettyTree = TreeUtils.toPrettyTree(tree, ruleNamesList);
+
+                    // Impresion del arbol
+                    System.out.println("Parse Tree: \n" + prettyTree);
+                }
 
 
             } catch (Exception e) {
-                System.out.println("Ocurrio un error al validar archivo: " + e.getMessage());
+                System.err.println("Ocurrio un error: " + e.getMessage());
             }
 
 
         } else {
-            System.out.println("Ruta del archivo .mc no fue proporcionado");
+            System.err.println("Ruta del archivo .mc no fue proporcionado");
         }
     }
 
-    public static String convertToCharStream(File mcFile) throws IOException {
+    public static String extractMCFileText(File mcFile) throws IOException {
 
         // Retorna el Charstream del .mc
         return Files.readString(mcFile.toPath(), StandardCharsets.UTF_8);

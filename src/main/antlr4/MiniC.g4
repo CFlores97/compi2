@@ -1,5 +1,9 @@
 grammar MiniC;
 
+@header {
+package org.example.antlr;
+}
+
 // ═══════════════════════════════════
 //  REGLAS SINTÁCTICAS
 // ═══════════════════════════════════
