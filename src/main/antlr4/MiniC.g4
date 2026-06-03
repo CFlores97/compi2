@@ -12,8 +12,9 @@ program         : (declaration | funcDef)* EOF ;
 
 declaration     : typeSpecifier declaratorList ';' ;
 declaratorList  : declarator (',' declarator)* ;
+
 declarator      : Identifier ('[' IntegerConst ']')*
-                | '*' Identifier ;
+                | '*' declarator ;
 
 typeSpecifier   : 'int' | 'char' | 'bool' | 'void' | 'string' ;
 
@@ -28,6 +29,7 @@ statement       : compoundStmt
                 | whileStmt
                 | forStmt
                 | doWhileStmt
+                | assignStmt
                 | returnStmt
                 | exprStmt ;
 
@@ -35,6 +37,7 @@ ifStmt          : 'if' '(' expr ')' statement ('else' statement)? ;
 whileStmt       : 'while' '(' expr ')' statement ;
 forStmt         : 'for' '(' exprStmt expr? ';' expr? ')' statement ;
 doWhileStmt     : 'do' statement 'while' '(' expr ')' ';' ;
+assignStmt      : lvalue '=' expr ';' ;
 returnStmt      : 'return' expr? ';' ;
 exprStmt        : expr? ';' ;
 
@@ -46,7 +49,6 @@ expr            : '(' expr ')'                                      # ParenExpr
                 | expr ('==' | '!=') expr                          # EqualityExpr
                 | expr '&&' expr                                    # AndExpr
                 | expr '||' expr                                    # OrExpr
-                | lvalue '=' expr                                   # AssignExpr
                 | Identifier '(' (expr (',' expr)*)? ')'           # CallExpr
                 | lvalue                                            # LvalueExpr
                 | IntegerConst                                      # IntLiteral
