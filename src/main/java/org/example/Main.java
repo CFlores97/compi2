@@ -25,10 +25,18 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 
+import org.antlr.v4.runtime.tree.ParseTree;
 import utils.TreeUtils;
 import utils.MinicErrorListener;
 import org.example.antlr.MiniCLexer;
 import org.example.antlr.MiniCParser;
+
+import org.antlr.v4.runtime.RuleContext;
+import org.antlr.v4.runtime.tree.ParseTreeWalker;
+import org.example.semantics.SymbolTable;
+import org.example.semantics.SymbolTableBuilder;
+import org.example.semantics.SemanticErrorReporter;
+import org.antlr.v4.runtime.tree.ParseTree;
 
 public class Main {
     public static void main(String[] args) {
@@ -73,22 +81,27 @@ public class Main {
                 parser.setBuildParseTree(true);
 
                 // Aqui llama a la regla inicial
-                RuleContext tree = parser.program();
+                ParseTree tree = parser.program();
 
                 if (errorListener.hasErrors()) {
                     System.err.println("El analisis termino con errores.");
-
                 } else {
-                    System.out.println("Analisis xitoso");
+                    System.out.println("Analisis sintactico exitoso");
 
-                    // Source - https://stackoverflow.com/a/50068645
-                    // Posted by GRosenberg, modified by community. See post 'Timeline' for change history
-                    // Retrieved 2026-05-13, License - CC BY-SA 4.0
-                    List<String> ruleNamesList = Arrays.asList(parser.getRuleNames());
-                    String prettyTree = TreeUtils.toPrettyTree(tree, ruleNamesList);
+                    SymbolTable symbolTable = new SymbolTable();
+                    SemanticErrorReporter semanticErrors = new SemanticErrorReporter();
+                    SymbolTableBuilder builder = new SymbolTableBuilder(symbolTable, semanticErrors);
 
-                    // Impresion del arbol
-                    System.out.println("Parse Tree: \n" + prettyTree);
+                    ParseTreeWalker.DEFAULT.walk(builder, tree);
+
+                    if (semanticErrors.hasErrors()) {
+                        System.err.println("El analisis semantico termino con errores.");
+                        semanticErrors.printErrors();
+                    } else {
+                        System.out.println("Analisis semantico exitoso.");
+                    }
+
+                    System.out.println(symbolTable);
                 }
 
 
