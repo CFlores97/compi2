@@ -98,7 +98,10 @@ public class Main {
                         System.err.println("El analisis semantico termino con errores.");
                         semanticErrors.printErrors();
                     } else {
+                        // Imprimir el árbol solo cuando todo está correcto
                         System.out.println("Analisis semantico exitoso.");
+                        System.out.println("\nParse Tree:");
+                        System.out.println(TreeUtils.toPrettyTree(tree, Arrays.asList(parser.getRuleNames())));
                     }
 
                     System.out.println(symbolTable);
