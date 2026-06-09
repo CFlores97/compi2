@@ -93,15 +93,14 @@ public class Main {
                     SymbolTableBuilder builder = new SymbolTableBuilder(symbolTable, semanticErrors);
 
                     ParseTreeWalker.DEFAULT.walk(builder, tree);
+                    System.out.println("\nParse Tree:");
+                    System.out.println(TreeUtils.toPrettyTree(tree, Arrays.asList(parser.getRuleNames())));
 
                     if (semanticErrors.hasErrors()) {
                         System.err.println("El analisis semantico termino con errores.");
                         semanticErrors.printErrors();
-                    } else {
-                        // Imprimir el árbol solo cuando todo está correcto
+                    }else{
                         System.out.println("Analisis semantico exitoso.");
-                        System.out.println("\nParse Tree:");
-                        System.out.println(TreeUtils.toPrettyTree(tree, Arrays.asList(parser.getRuleNames())));
                     }
 
                     System.out.println(symbolTable);
