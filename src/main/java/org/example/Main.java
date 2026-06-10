@@ -37,6 +37,10 @@ import org.example.semantics.SymbolTable;
 import org.example.semantics.SymbolTableBuilder;
 import org.example.semantics.SemanticErrorReporter;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.example.ast.Ast;
+import org.example.ast.MiniCASTBuilder;
+import org.example.ast.RecorridoVisitor;
+
 
 public class Main {
     public static void main(String[] args) {
@@ -88,13 +92,27 @@ public class Main {
                 } else {
                     System.out.println("Analisis sintactico exitoso");
 
+
+                    MiniCASTBuilder astBuilder = new MiniCASTBuilder();
+                    Ast.Node ast = astBuilder.visit(tree);
+
+                    // impreison de AST
+                    System.out.println(" == AST == ");
+                    System.out.println(ast.print(""));
+
+                    // impresion de recorrido de visitor
+                    // esto para validar que en ANTLR visita los nodos
+                    System.out.println(" == Recorrido del visitor == ");
+                    RecorridoVisitor trace = new RecorridoVisitor();
+                    trace.visit(tree);
+
+
                     SymbolTable symbolTable = new SymbolTable();
                     SemanticErrorReporter semanticErrors = new SemanticErrorReporter();
                     SymbolTableBuilder builder = new SymbolTableBuilder(symbolTable, semanticErrors);
 
                     ParseTreeWalker.DEFAULT.walk(builder, tree);
-                    System.out.println("\nParse Tree:");
-                    System.out.println(TreeUtils.toPrettyTree(tree, Arrays.asList(parser.getRuleNames())));
+
 
                     if (semanticErrors.hasErrors()) {
                         System.err.println("El analisis semantico termino con errores.");
@@ -103,7 +121,14 @@ public class Main {
                         System.out.println("Analisis semantico exitoso.");
                     }
 
+                    // impresion de tabla de simbolos
                     System.out.println(symbolTable);
+
+                    // impresion de arbol de parseo
+                    List<String> ruleNamesList = Arrays.asList(parser.getRuleNames());
+                    String prettyTree = TreeUtils.toPrettyTree(tree, ruleNamesList);
+                    System.out.println(" == Parse Tree == ");
+                    System.out.println(prettyTree);
                 }
 
 

@@ -38,7 +38,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <visitor>false</visitor>
+                    <visitor>true</visitor>
                     <listener>true</listener>
                 </configuration>
             </plugin>
