@@ -16,7 +16,7 @@ public final class Ast {
     }
 
     public static class Program implements Node {
-        private final List<Node> items;
+        public final List<Node> items;
 
         public Program(List<Node> items) {
             this.items = items;
@@ -34,10 +34,10 @@ public final class Ast {
     }
 
     public static class Function implements Node {
-        private final String returnType;
-        private final String name;
-        private final List<Param> params;
-        private final Block body;
+        public final String returnType;
+        public final String name;
+        public final List<Param> params;
+        public final Block body;
 
         public Function(String returnType, String name, List<Param> params, Block body) {
             this.returnType = returnType;
@@ -70,8 +70,8 @@ public final class Ast {
     }
 
     public static class Param implements Node {
-        private final String type;
-        private final String name;
+        public final String type;   // <- cambiar private a public
+        public final String name;
 
         public Param(String type, String name) {
             this.type = type;
@@ -85,7 +85,7 @@ public final class Ast {
     }
 
     public static class Block implements Node {
-        private final List<Node> items;
+        public final List<Node> items;
 
         public Block(List<Node> items) {
             this.items = items;
@@ -107,8 +107,8 @@ public final class Ast {
     }
 
     public static class Declaration implements Node {
-        private final String type;
-        private final List<String> names;
+        public final String type;        // <- cambiar private a public
+        public final List<String> names;
 
         public Declaration(String type, List<String> names) {
             this.type = type;
@@ -127,7 +127,7 @@ public final class Ast {
     }
 
     public static class ReturnStmt implements Node {
-        private final Expr value;
+        public final Expr value;
 
         public ReturnStmt(Expr value) {
             this.value = value;
@@ -145,8 +145,8 @@ public final class Ast {
     }
 
     public static class AssignStmt implements Node {
-        private final String target;
-        private final Expr value;
+        public final String target;
+        public final Expr value;
 
         public AssignStmt(String target, Expr value) {
 
@@ -166,9 +166,9 @@ public final class Ast {
     }
 
     public static class IfStmt implements Node {
-        private final Expr condition;
-        private final Node thenBranch;
-        private final Node elseBranch;
+        public final Expr condition;
+        public final Node thenBranch;
+        public final Node elseBranch;
 
         public IfStmt(Expr condition, Node thenBranch, Node elseBranch) {
             this.condition = condition;
@@ -193,8 +193,8 @@ public final class Ast {
     }
 
     public static class WhileStmt implements Node {
-        private final Expr condition;
-        private final Node body;
+        public final Expr condition;
+        public final Node body;
 
         public WhileStmt(Expr condition, Node body) {
             this.condition = condition;
@@ -214,7 +214,7 @@ public final class Ast {
     }
 
     public static class ExprStmt implements Node {
-        private final Expr expr;
+        public final Expr expr;
 
         public ExprStmt(Expr expr) {
             this.expr = expr;
@@ -258,7 +258,7 @@ public final class Ast {
     }
 
     public static class Variable implements Expr {
-        private final String name;
+        public final String name;
 
         public Variable(String name) {
             this.name = name;
@@ -271,8 +271,8 @@ public final class Ast {
     }
 
     public static class Call implements Expr {
-        private final String name;
-        private final List<Expr> args;
+        public final String name;
+        public final List<Expr> args;
 
         public Call(String name, List<Expr> args) {
             this.name = name;
@@ -298,5 +298,54 @@ public final class Ast {
     public static List<Node> nodeList() {
         return new ArrayList<>();
     }
+    // Literal: números, chars, strings, true/false
+    public static class Literal implements Expr {
+        public final String value;
 
+        public Literal(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String print(String indent) {
+            return indent + "Literal " + value + "\n";
+        }
+    }
+
+    // BinaryExpr: operaciones como a + b, x > 0, etc.
+    public static class BinaryExpr implements Expr {
+        public final Expr left;
+        public final String op;
+        public final Expr right;
+
+        public BinaryExpr(Expr left, String op, Expr right) {
+            this.left  = left;
+            this.op    = op;
+            this.right = right;
+        }
+
+        @Override
+        public String print(String indent) {
+            return indent + "Binary " + op + "\n"
+                    + left.print(indent + "  ")
+                    + right.print(indent + "  ");
+        }
+    }
+
+    // UnaryExpr: operaciones como !x, -x
+    public static class UnaryExpr implements Expr {
+        public final String op;
+        public final Expr expr;
+
+        public UnaryExpr(String op, Expr expr) {
+            this.op   = op;
+            this.expr = expr;
+        }
+
+        @Override
+        public String print(String indent) {
+            return indent + "Unary " + op + "\n"
+                    + expr.print(indent + "  ");
+        }
+    }
 }

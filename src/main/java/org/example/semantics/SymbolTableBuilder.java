@@ -3,6 +3,8 @@ package org.example.semantics;
 import org.antlr.v4.runtime.Token;
 import org.example.antlr.MiniCBaseListener;
 import org.example.antlr.MiniCParser;
+import java.util.ArrayList;
+import java.util.List;
 
 // Recorre el árbol de parseo generado por ANTLR4
 // y construye la tabla de símbolos con sus ámbitos
@@ -33,19 +35,30 @@ public class SymbolTableBuilder extends MiniCBaseListener {
         String typeName = ctx.typeSpecifier().getText();
         Token  token    = ctx.Identifier().getSymbol();
 
-        Symbol sym = new Symbol(name, SymbolKind.FUNCTION,
+        // Construir la lista de tipos de parámetros ANTES de definir la función
+        List<MiniCType> paramTypes = new ArrayList<>();
+        if (ctx.params() != null) {
+            for (MiniCParser.ParamContext p : ctx.params().param()) {
+                String pType = p.typeSpecifier().getText();
+                int    dims  = countDimensions(p.declarator());
+                boolean ptr  = isPointer(p.declarator());
+                paramTypes.add(new MiniCType(pType, ptr, dims));
+            }
+        }
+
+        FunctionSymbol sym = new FunctionSymbol(name,
                 new MiniCType(typeName, false, 0),
+                paramTypes,
                 token.getLine(), token.getCharPositionInLine());
 
-        // Si ya existe una función con ese nombre, es redeclaración
         if (!symbolTable.define(sym))
             errors.addError(token.getLine(), token.getCharPositionInLine(),
                     "la funcion '" + name + "' ya fue declarada");
 
-        // Abre el ámbito de la función
         symbolTable.enterScope("funcion " + name);
         enteringFunctionBody = true;
     }
+
 
     // Al salir de una función: cerrar su ámbito
     @Override

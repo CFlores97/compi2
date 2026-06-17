@@ -41,6 +41,8 @@ import org.example.ast.Ast;
 import org.example.ast.MiniCASTBuilder;
 import org.example.ast.RecorridoVisitor;
 
+import org.example.semantics.TypeChecker;
+
 
 public class Main {
     public static void main(String[] args) {
@@ -113,7 +115,9 @@ public class Main {
 
                     ParseTreeWalker.DEFAULT.walk(builder, tree);
 
-
+                    // Ejecutar el TypeChecker sobre el AST
+                    TypeChecker typeChecker = new TypeChecker(symbolTable, semanticErrors);
+                    typeChecker.check(ast);
                     if (semanticErrors.hasErrors()) {
                         System.err.println("El analisis semantico termino con errores.");
                         semanticErrors.printErrors();

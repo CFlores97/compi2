@@ -80,30 +80,32 @@ public class MiniCASTBuilder extends MiniCBaseVisitor<Ast.Node> {
     public Ast.Node visitReturnStmt(MiniCParser.ReturnStmtContext ctx) {
         Ast.Expr value = null;
         if (ctx.expr() != null) {
-            value = new Ast.RawExpr(ctx.expr().getText());
+            Ast.Node exprNode = visit(ctx.expr());
+            value = (exprNode instanceof Ast.Expr) ? (Ast.Expr) exprNode : new Ast.RawExpr(ctx.expr().getText());
         }
         return new Ast.ReturnStmt(value);
     }
 
     @Override
     public Ast.Node visitAssignStmt(MiniCParser.AssignStmtContext ctx) {
-
         String target = ctx.lvalue().getText();
-        Ast.Expr value = new Ast.RawExpr(ctx.expr().getText());
+        Ast.Node exprNode = visit(ctx.expr());
+        Ast.Expr value = (exprNode instanceof Ast.Expr) ? (Ast.Expr) exprNode : new Ast.RawExpr(ctx.expr().getText());
         return new Ast.AssignStmt(target, value);
     }
 
     @Override
     public Ast.Node visitExprStmt(MiniCParser.ExprStmtContext ctx) {
-        if (ctx.expr() == null) {
-            return new Ast.ExprStmt(null);
-        }
-        return new Ast.ExprStmt(new Ast.RawExpr(ctx.expr().getText()));
+        if (ctx.expr() == null) return new Ast.ExprStmt(null);
+        Ast.Node exprNode = visit(ctx.expr());
+        Ast.Expr expr = (exprNode instanceof Ast.Expr) ? (Ast.Expr) exprNode : new Ast.RawExpr(ctx.expr().getText());
+        return new Ast.ExprStmt(expr);
     }
 
     @Override
     public Ast.Node visitIfStmt(MiniCParser.IfStmtContext ctx) {
-        Ast.Expr condition = new Ast.RawExpr(ctx.expr().getText());
+        Ast.Node condNode = visit(ctx.expr());
+        Ast.Expr condition = (condNode instanceof Ast.Expr) ? (Ast.Expr) condNode : new Ast.RawExpr(ctx.expr().getText());
         Ast.Node thenBranch = visit(ctx.statement(0));
         Ast.Node elseBranch = null;
         if (ctx.statement().size() > 1) {
@@ -114,7 +116,8 @@ public class MiniCASTBuilder extends MiniCBaseVisitor<Ast.Node> {
 
     @Override
     public Ast.Node visitWhileStmt(MiniCParser.WhileStmtContext ctx) {
-        Ast.Expr condition = new Ast.RawExpr(ctx.expr().getText());
+        Ast.Node condNode = visit(ctx.expr());
+        Ast.Expr condition = (condNode instanceof Ast.Expr) ? (Ast.Expr) condNode : new Ast.RawExpr(ctx.expr().getText());
         Ast.Node body = visit(ctx.statement());
         return new Ast.WhileStmt(condition, body);
     }
@@ -145,6 +148,97 @@ public class MiniCASTBuilder extends MiniCBaseVisitor<Ast.Node> {
         return new Ast.Call(name, args);
     }
 
+    // Literales
+    @Override
+    public Ast.Node visitIntLiteral(MiniCParser.IntLiteralContext ctx) {
+        return new Ast.Literal(ctx.getText());
+    }
+
+    @Override
+    public Ast.Node visitTrueLiteral(MiniCParser.TrueLiteralContext ctx) {
+        return new Ast.Literal("true");
+    }
+
+    @Override
+    public Ast.Node visitFalseLiteral(MiniCParser.FalseLiteralContext ctx) {
+        return new Ast.Literal("false");
+    }
+
+    @Override
+    public Ast.Node visitCharLiteral(MiniCParser.CharLiteralContext ctx) {
+        return new Ast.Literal(ctx.getText());
+    }
+
+    @Override
+    public Ast.Node visitStringLiteralExpr(MiniCParser.StringLiteralExprContext ctx) {
+        return new Ast.Literal(ctx.getText());
+    }
+
+    // Variable usada en expresión
+    @Override
+    public Ast.Node visitLvalueExpr(MiniCParser.LvalueExprContext ctx) {
+        return new Ast.Variable(ctx.lvalue().Identifier().getText());
+    }
+
+    // Expresiones binarias
+    @Override
+    public Ast.Node visitAdditiveExpr(MiniCParser.AdditiveExprContext ctx) {
+        Ast.Node left  = visit(ctx.expr(0));
+        Ast.Node right = visit(ctx.expr(1));
+        String op = ctx.getChild(1).getText();
+        return new Ast.BinaryExpr(toExpr(left, ctx.expr(0)), op, toExpr(right, ctx.expr(1)));
+    }
+
+    @Override
+    public Ast.Node visitMultiplicativeExpr(MiniCParser.MultiplicativeExprContext ctx) {
+        Ast.Node left  = visit(ctx.expr(0));
+        Ast.Node right = visit(ctx.expr(1));
+        String op = ctx.getChild(1).getText();
+        return new Ast.BinaryExpr(toExpr(left, ctx.expr(0)), op, toExpr(right, ctx.expr(1)));
+    }
+
+    @Override
+    public Ast.Node visitRelationalExpr(MiniCParser.RelationalExprContext ctx) {
+        Ast.Node left  = visit(ctx.expr(0));
+        Ast.Node right = visit(ctx.expr(1));
+        String op = ctx.getChild(1).getText();
+        return new Ast.BinaryExpr(toExpr(left, ctx.expr(0)), op, toExpr(right, ctx.expr(1)));
+    }
+
+    @Override
+    public Ast.Node visitEqualityExpr(MiniCParser.EqualityExprContext ctx) {
+        Ast.Node left  = visit(ctx.expr(0));
+        Ast.Node right = visit(ctx.expr(1));
+        String op = ctx.getChild(1).getText();
+        return new Ast.BinaryExpr(toExpr(left, ctx.expr(0)), op, toExpr(right, ctx.expr(1)));
+    }
+
+    @Override
+    public Ast.Node visitAndExpr(MiniCParser.AndExprContext ctx) {
+        Ast.Node left  = visit(ctx.expr(0));
+        Ast.Node right = visit(ctx.expr(1));
+        return new Ast.BinaryExpr(toExpr(left, ctx.expr(0)), "&&", toExpr(right, ctx.expr(1)));
+    }
+
+    @Override
+    public Ast.Node visitOrExpr(MiniCParser.OrExprContext ctx) {
+        Ast.Node left  = visit(ctx.expr(0));
+        Ast.Node right = visit(ctx.expr(1));
+        return new Ast.BinaryExpr(toExpr(left, ctx.expr(0)), "||", toExpr(right, ctx.expr(1)));
+    }
+
+    @Override
+    public Ast.Node visitParenExpr(MiniCParser.ParenExprContext ctx) {
+        return visit(ctx.expr());
+    }
+
+    @Override
+    public Ast.Node visitUnaryExpr(MiniCParser.UnaryExprContext ctx) {
+        String op = ctx.getChild(0).getText();
+        Ast.Node expr = visit(ctx.expr());
+        return new Ast.UnaryExpr(op, toExpr(expr, ctx.expr()));
+    }
+
     private String declaratorToString(MiniCParser.DeclaratorContext ctx) {
         if (ctx.Identifier() != null) {
             StringBuilder sb = new StringBuilder();
@@ -155,5 +249,11 @@ public class MiniCASTBuilder extends MiniCBaseVisitor<Ast.Node> {
             return sb.toString();
         }
         return "*" + declaratorToString(ctx.declarator());
+    }
+
+    // Convierte un Node a Expr, usando RawExpr como fallback
+    private Ast.Expr toExpr(Ast.Node node, MiniCParser.ExprContext ctx) {
+        if (node instanceof Ast.Expr) return (Ast.Expr) node;
+        return new Ast.RawExpr(ctx.getText());
     }
 }
