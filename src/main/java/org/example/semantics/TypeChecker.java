@@ -47,19 +47,19 @@ public class TypeChecker {
         currentFunctionName = func.name;
         localVarTypes.clear();
 
-        // Obtiene el tipo de retorno desde la tabla de símbolos
         Symbol sym = symbolTable.resolve(func.name);
         if (sym != null) {
             currentReturnType = sym.getType();
         }
 
-        // Agrega los parámetros al mapa local
         for (Ast.Param param : func.params) {
             localVarTypes.put(param.name, new MiniCType(param.type, false, 0));
         }
 
-        // Recorre las declaraciones del bloque y las agrega al mapa local
         collectDeclarations(func.body);
+
+        // Verificar que la función tenga return si no es void
+        checkReturnPresence(func);
 
         checkBlock(func.body);
 
@@ -274,5 +274,39 @@ public class TypeChecker {
         }
 
         return func.getType();
+    }
+
+    // Verifica que la función tenga al menos un return si no es void
+    private void checkReturnPresence(Ast.Function func) {
+        if (currentReturnType == null) return;
+        if (currentReturnType.getName().equals("void")) return;
+
+        // Busca si existe al menos un ReturnStmt con valor en el bloque
+        if (!blockHasReturn(func.body)) {
+            errors.addError(0, 0,
+                    "la funcion '" + func.name
+                            + "' debe retornar un valor de tipo '" + currentReturnType
+                            + "' pero no tiene return");
+        }
+    }
+
+    // Revisa recursivamente si un bloque tiene al menos un return con valor
+    private boolean blockHasReturn(Ast.Block block) {
+        for (Ast.Node stmt : block.items) {
+            if (stmt instanceof Ast.ReturnStmt) {
+                return ((Ast.ReturnStmt) stmt).value != null;
+            }
+            if (stmt instanceof Ast.Block) {
+                if (blockHasReturn((Ast.Block) stmt)) return true;
+            }
+            if (stmt instanceof Ast.IfStmt) {
+                Ast.IfStmt ifStmt = (Ast.IfStmt) stmt;
+                if (ifStmt.thenBranch instanceof Ast.Block
+                        && blockHasReturn((Ast.Block) ifStmt.thenBranch)) return true;
+                if (ifStmt.elseBranch instanceof Ast.Block
+                        && blockHasReturn((Ast.Block) ifStmt.elseBranch)) return true;
+            }
+        }
+        return false;
     }
 }
