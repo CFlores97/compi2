@@ -3,73 +3,37 @@ package org.example.IR;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ConstantFolder {
-
+/** Required optimization: evaluates TAC arithmetic when both operands are constants. */
+public final class ConstantFolder {
     public IRProgram optimize(IRProgram program) {
         for (IRFunction function : program.functions) {
-            List<IRInstruction> optimized = new ArrayList<>();
-
+            List<IRInstruction> output = new ArrayList<>();
             for (IRInstruction instruction : function.code) {
-                if (isFoldable(instruction)) {
+                if (foldable(instruction)) {
                     int left = instruction.arg1.intValue();
                     int right = instruction.arg2.intValue();
-
-                    int result = evaluate(instruction.op, left, right);
-
-                    optimized.add(
-                            IRInstruction.assign(
-                                    instruction.result,
-                                    Operand.constant(String.valueOf(result))
-                            )
-                    );
-                } else {
-                    optimized.add(instruction);
-                }
+                    output.add(IRInstruction.assign(instruction.result, Operand.constant(String.valueOf(evaluate(instruction.op, left, right)))));
+                } else output.add(instruction);
             }
-
             function.code.clear();
-            function.code.addAll(optimized);
+            function.code.addAll(output);
         }
-
         return program;
     }
 
-    private boolean isFoldable(IRInstruction instruction) {
-        boolean validOperation =
-                instruction.op == IROp.ADD ||
-                        instruction.op == IROp.SUB ||
-                        instruction.op == IROp.MUL ||
-                        instruction.op == IROp.DIV ||
-                        instruction.op == IROp.MOD;
-
-        if (!validOperation ||
-                instruction.arg1 == null ||
-                instruction.arg2 == null ||
-                !instruction.arg1.isConst() ||
-                !instruction.arg2.isConst()) {
-            return false;
-        }
-
-        int divisor = instruction.arg2.intValue();
-
-        if ((instruction.op == IROp.DIV || instruction.op == IROp.MOD)
-                && divisor == 0) {
-            return false;
-        }
-
-        return true;
+    private boolean foldable(IRInstruction i) {
+        if (i.arg1 == null || i.arg2 == null || !i.arg1.isConst() || !i.arg2.isConst()) return false;
+        if ((i.op == IROp.DIV || i.op == IROp.MOD) && i.arg2.intValue() == 0) return false;
+        return switch (i.op) { case ADD, SUB, MUL, DIV, MOD, LT, LE, GT, GE, EQ, NE, AND, OR -> true; default -> false; };
     }
 
-    private int evaluate(IROp op, int left, int right) {
+    private int evaluate(IROp op, int a, int b) {
         return switch (op) {
-            case ADD -> left + right;
-            case SUB -> left - right;
-            case MUL -> left * right;
-            case DIV -> left / right;
-            case MOD -> left % right;
-            default -> throw new IllegalArgumentException(
-                    "Operacion no optimizable: " + op
-            );
+            case ADD -> a+b; case SUB -> a-b; case MUL -> a*b; case DIV -> a/b; case MOD -> a%b;
+            case LT -> a < b ? 1 : 0; case LE -> a <= b ? 1 : 0; case GT -> a > b ? 1 : 0; case GE -> a >= b ? 1 : 0;
+            case EQ -> a == b ? 1 : 0; case NE -> a != b ? 1 : 0;
+            case AND -> (a != 0 && b != 0) ? 1 : 0; case OR -> (a != 0 || b != 0) ? 1 : 0;
+            default -> throw new IllegalArgumentException("No plegable: " + op);
         };
     }
 }

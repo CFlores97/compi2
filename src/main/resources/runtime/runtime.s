@@ -1,6 +1,6 @@
 .text
 
-
+# Runtime mínimo para Mini-C. Los argumentos llegan en $a0/$a1 y los retornos en $v0.
 
 .globl print_int
 print_int:
@@ -9,7 +9,6 @@ print_int:
     jr $ra
     nop
 
-
 .globl print_char
 print_char:
     li $v0, 11
@@ -17,8 +16,7 @@ print_char:
     jr $ra
     nop
 
-
-
+# Por decisión del proyecto, bool se imprime como 0 o 1.
 .globl print_bool
 print_bool:
     li $v0, 1
@@ -26,14 +24,12 @@ print_bool:
     jr $ra
     nop
 
-
 .globl print_str
 print_str:
     li $v0, 4
     syscall
     jr $ra
     nop
-
 
 .globl println
 println:
@@ -43,14 +39,12 @@ println:
     jr $ra
     nop
 
-
 .globl read_int
 read_int:
     li $v0, 5
     syscall
     jr $ra
     nop
-
 
 .globl read_char
 read_char:
@@ -59,10 +53,7 @@ read_char:
     jr $ra
     nop
 
-
-# Recibe:
-# $a0 = dirección del buffer
-# $a1 = tamaño máximo
+# $a0 = buffer; $a1 = maxlen
 .globl read_str
 read_str:
     li $v0, 8

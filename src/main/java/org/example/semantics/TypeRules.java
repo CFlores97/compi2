@@ -1,94 +1,47 @@
 package org.example.semantics;
 
 public final class TypeRules {
+    private TypeRules() { }
 
-    private TypeRules() {
-    }
-
-    public static boolean sameType(
-            MiniCType first,
-            MiniCType second
-    ) {
-        if (first == null || second == null) {
-            return false;
-        }
-
-        return first.getName().equals(second.getName())
-                && first.isPointer() == second.isPointer()
-                && first.getDimensions() == second.getDimensions();
+    public static boolean sameType(MiniCType left, MiniCType right) {
+        return left != null && left.equals(right);
     }
 
     public static boolean isScalar(MiniCType type) {
-        return type != null
-                && !type.isPointer()
-                && type.getDimensions() == 0;
+        return type != null && !type.isArray();
     }
 
     public static boolean isNumeric(MiniCType type) {
-        return isScalar(type)
-                && (type.getName().equals("int")
-                || type.getName().equals("char"));
+        return isScalar(type) && !type.isPointer()
+                && ("int".equals(type.getName()) || "char".equals(type.getName()));
     }
 
     public static boolean isConditionType(MiniCType type) {
-        return isScalar(type)
-                && (type.getName().equals("bool")
-                || type.getName().equals("int")
-                || type.getName().equals("char"));
+        return isScalar(type) && !type.isPointer()
+                && ("bool".equals(type.getName()) || "int".equals(type.getName()) || "char".equals(type.getName()));
     }
 
     public static boolean isIndexType(MiniCType type) {
         return isNumeric(type);
     }
 
-    public static boolean canAssign(
-            MiniCType target,
-            MiniCType value
-    ) {
-        if (target == null || value == null) {
-            return false;
-        }
-
-        // No se permite asignar arreglos completos.
-        if (target.getDimensions() > 0 ||
-                value.getDimensions() > 0) {
-            return false;
-        }
-
-        if (sameType(target, value)) {
-            return true;
-        }
-
-        // Promoción permitida: char -> int.
-        return !target.isPointer()
-                && !value.isPointer()
-                && target.getName().equals("int")
-                && value.getName().equals("char");
+    public static boolean canAssign(MiniCType target, MiniCType value) {
+        if (target == null || value == null) return false;
+        // Arrays do not receive whole-array assignment in this Mini-C implementation.
+        if (target.isArray() || value.isArray()) return false;
+        if (sameType(target, value)) return true;
+        // Safe numeric promotion required by the assignment specification.
+        return "int".equals(target.getName()) && target.getPointerDepth() == 0
+                && "char".equals(value.getName()) && value.getPointerDepth() == 0;
     }
 
-    public static boolean canCompareEquality(
-            MiniCType left,
-            MiniCType right
-    ) {
-        if (left == null || right == null) {
-            return false;
-        }
-
-        if (sameType(left, right)) {
-            return true;
-        }
-
-        return isNumeric(left) && isNumeric(right);
+    public static boolean canCompareEquality(MiniCType left, MiniCType right) {
+        if (left == null || right == null) return false;
+        return sameType(left, right) || (isNumeric(left) && isNumeric(right));
     }
 
-    public static MiniCType arithmeticResult(
-            MiniCType left,
-            MiniCType right
-    ) {
-        if (!isNumeric(left) || !isNumeric(right)) {
-            return null;
-        }
-
-        return new MiniCType("int", false, 0);
+    public static MiniCType arithmeticResult(MiniCType left, MiniCType right) {
+        if (!isNumeric(left) || !isNumeric(right)) return null;
+        return MiniCType.scalar("int");
     }
 }

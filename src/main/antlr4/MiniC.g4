@@ -4,71 +4,162 @@ grammar MiniC;
 package org.example.antlr;
 }
 
-// ═══════════════════════════════════
-//  REGLAS SINTÁCTICAS
-// ═══════════════════════════════════
+// ============================================================
+// Parser
+// ============================================================
 
-program         : (declaration | funcDef)* EOF ;
+program
+    : (declaration | funcDef)* EOF
+    ;
 
-declaration     : typeSpecifier declaratorList ';' ;
-declaratorList  : declarator (',' declarator)* ;
+declaration
+    : typeSpecifier initDeclaratorList ';'
+    ;
 
-declarator      : Identifier ('[' IntegerConst ']')*
-                | '*' declarator ;
+initDeclaratorList
+    : initDeclarator (',' initDeclarator)*
+    ;
 
-typeSpecifier   : 'int' | 'char' | 'bool' | 'void' | 'string' ;
+initDeclarator
+    : declarator ('=' expr)?
+    ;
 
-funcDef         : typeSpecifier Identifier '(' params? ')' compoundStmt ;
-params          : param (',' param)* ;
-param           : typeSpecifier declarator ;
+// Supports: x, *p, **pp, a[10], m[10][5]
+declarator
+    : '*'* Identifier ('[' IntegerConst ']')*
+    ;
 
-compoundStmt    : '{' (declaration | statement)* '}' ;
+typeSpecifier
+    : 'int'
+    | 'char'
+    | 'bool'
+    | 'void'
+    | 'string'
+    ;
 
-statement       : compoundStmt
-                | ifStmt
-                | whileStmt
-                | forStmt
-                | doWhileStmt
-                | assignStmt
-                | returnStmt
-                | exprStmt ;
+funcDef
+    : typeSpecifier Identifier '(' params? ')' compoundStmt
+    ;
 
-ifStmt          : 'if' '(' expr ')' statement ('else' statement)? ;
-whileStmt       : 'while' '(' expr ')' statement ;
-forStmt         : 'for' '(' exprStmt expr? ';' expr? ')' statement ;
-doWhileStmt     : 'do' statement 'while' '(' expr ')' ';' ;
-assignStmt      : lvalue '=' expr ';' ;
-returnStmt      : 'return' expr? ';' ;
-exprStmt        : expr? ';' ;
+params
+    : param (',' param)*
+    ;
 
-expr            : '(' expr ')'                                      # ParenExpr
-                | ('!' | '-' | '*' | '&') expr                     # UnaryExpr
-                | expr ('*' | '/' | '%') expr                      # MultiplicativeExpr
-                | expr ('+' | '-') expr                            # AdditiveExpr
-                | expr ('<' | '>' | '<=' | '>=') expr              # RelationalExpr
-                | expr ('==' | '!=') expr                          # EqualityExpr
-                | expr '&&' expr                                    # AndExpr
-                | expr '||' expr                                    # OrExpr
-                | Identifier '(' (expr (',' expr)*)? ')'           # CallExpr
-                | lvalue                                            # LvalueExpr
-                | IntegerConst                                      # IntLiteral
-                | CharConst                                         # CharLiteral
-                | StringLiteral                                     # StringLiteralExpr
-                | 'true'                                            # TrueLiteral
-                | 'false'                                           # FalseLiteral
-                ;
+param
+    : typeSpecifier declarator
+    ;
 
-lvalue          : Identifier ('[' expr ']')* ;
+compoundStmt
+    : '{' (declaration | statement)* '}'
+    ;
 
-// ═══════════════════════════════════
-//  TOKENS (LÉXICO)
-// ═══════════════════════════════════
+statement
+    : compoundStmt
+    | ifStmt
+    | whileStmt
+    | forStmt
+    | doWhileStmt
+    | assignStmt
+    | returnStmt
+    | exprStmt
+    ;
 
-Identifier    : [A-Za-z_][A-Za-z0-9_]* ;
-IntegerConst  : [0-9]+ ;
-CharConst     : '\'' . '\'' ;
-StringLiteral : '"' (~["\\\r\n])* '"' ;
+ifStmt
+    : 'if' '(' expr ')' statement ('else' statement)?
+    ;
 
-WS            : [ \t\r\n]+         -> skip ;
-LINE_COMMENT  : '//' ~[\r\n]*      -> skip ;
-BLOCK_COMMENT : '/*' .*? '*/'      -> skip ;
+whileStmt
+    : 'while' '(' expr ')' statement
+    ;
+
+// The initializer and update may be an assignment or an expression.
+forStmt
+    : 'for' '(' forInit ';' expr? ';' forStep ')' statement
+    ;
+
+forInit
+    : assignNoSemi
+    | expr?
+    ;
+
+forStep
+    : assignNoSemi
+    | expr?
+    ;
+
+doWhileStmt
+    : 'do' statement 'while' '(' expr ')' ';'
+    ;
+
+assignStmt
+    : lvalue '=' expr ';'
+    ;
+
+assignNoSemi
+    : lvalue '=' expr
+    ;
+
+returnStmt
+    : 'return' expr? ';'
+    ;
+
+exprStmt
+    : expr? ';'
+    ;
+
+expr
+    : '(' expr ')'                                      # ParenExpr
+    | ('!' | '-' | '*' | '&') expr                     # UnaryExpr
+    | expr ('*' | '/' | '%') expr                      # MultiplicativeExpr
+    | expr ('+' | '-') expr                            # AdditiveExpr
+    | expr ('<' | '>' | '<=' | '>=') expr              # RelationalExpr
+    | expr ('==' | '!=') expr                          # EqualityExpr
+    | expr '&&' expr                                   # AndExpr
+    | expr '||' expr                                   # OrExpr
+    | Identifier '(' (expr (',' expr)*)? ')'           # CallExpr
+    | lvalue                                            # LvalueExpr
+    | IntegerConst                                      # IntLiteral
+    | CharConst                                         # CharLiteral
+    | StringLiteral                                     # StringLiteralExpr
+    | 'true'                                            # TrueLiteral
+    | 'false'                                           # FalseLiteral
+    ;
+
+// A dereference is valid on the left side: *p = 5.
+lvalue
+    : Identifier ('[' expr ']')*
+    | '*' lvalue
+    ;
+
+// ============================================================
+// Lexer
+// ============================================================
+
+Identifier
+    : [A-Za-z_] [A-Za-z0-9_]*
+    ;
+
+IntegerConst
+    : [0-9]+
+    ;
+
+CharConst
+    : '\'' ( '\\' . | ~['\\\r\n] ) '\''
+    ;
+
+StringLiteral
+    : '"' ( '\\' . | ~["\\\r\n] )* '"'
+    ;
+
+WS
+    : [ \t\r\n]+ -> skip
+    ;
+
+LINE_COMMENT
+    : '//' ~[\r\n]* -> skip
+    ;
+
+BLOCK_COMMENT
+    : '/*' .*? '*/' -> skip
+    ;
+

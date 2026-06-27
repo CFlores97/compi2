@@ -1,44 +1,33 @@
 package org.example.IR;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-public class IRProgram {
-
+public final class IRProgram {
     public final List<IRFunction> functions = new ArrayList<>();
+    public final List<IRGlobal> globals = new ArrayList<>();
+    public final List<IRString> strings = new ArrayList<>();
+    private final Map<String, Operand> stringPool = new LinkedHashMap<>();
 
-    public void addFunction(IRFunction function) {
-        if (function == null) {
-            throw new IllegalArgumentException(
-                    "No se puede agregar una funcion IR nula."
-            );
-        }
+    public void addFunction(IRFunction function) { functions.add(function); }
+    public void addGlobal(IRGlobal global) { globals.add(global); }
 
-        functions.add(function);
+    public Operand internString(String literalText) {
+        Operand existing = stringPool.get(literalText);
+        if (existing != null) return existing;
+        Operand created = Operand.string("str_" + (strings.size() + 1));
+        stringPool.put(literalText, created);
+        strings.add(new IRString(created.value, literalText));
+        return created;
     }
 
-    public List<IRFunction> getFunctions() {
-        return functions;
-    }
-
-    public IRFunction getFunction(String name) {
-        for (IRFunction function : functions) {
-            if (function.getName().equals(name)) {
-                return function;
-            }
-        }
-
-        return null;
-    }
-
-    @Override
-    public String toString() {
+    @Override public String toString() {
         StringBuilder sb = new StringBuilder();
-
-        for (IRFunction function : functions) {
-            sb.append(function).append("\n");
-        }
-
+        for (IRGlobal global : globals) sb.append("global ").append(global.label).append(" : ").append(global.type).append("\n");
+        for (IRString string : strings) sb.append("string ").append(string.label).append(" = ").append(string.literalText).append("\n");
+        for (IRFunction function : functions) sb.append(function).append("\n");
         return sb.toString();
     }
 }

@@ -1,14 +1,13 @@
 package org.example.IR;
 
-public class LabelFactory {
-    private int count = 0;
+public final class LabelFactory {
+    private int count;
 
     public Operand newLabel(String prefix) {
-        count++;
-        return Operand.label(prefix + count);
+        return Operand.label(prefix + (++count));
     }
 
-    public void reset(){
-        this.count = 0;
+    public void reset() {
+        count = 0;
     }
 }
