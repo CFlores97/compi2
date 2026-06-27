@@ -1,38 +1,94 @@
 package org.example.semantics;
 
-// Reglas de compatibilidad de tipos entre Mini-C
-public class TypeRules {
+public final class TypeRules {
 
-    // ¿Se puede asignar 'value' a una variable de tipo 'target'?
-    public static boolean canAssign(MiniCType target, MiniCType value) {
-        if (target == null || value == null) return false;
+    private TypeRules() {
+    }
 
-        // Mismo tipo exacto (incluye mismas dimensiones de arreglo)
-        if (target.toString().equals(value.toString())) return true;
+    public static boolean sameType(
+            MiniCType first,
+            MiniCType second
+    ) {
+        if (first == null || second == null) {
+            return false;
+        }
 
-        // char se puede asignar a int (promoción), solo si ambos son simples
-        if (target.getName().equals("int") && value.getName().equals("char")
-                && target.getDimensions() == 0 && value.getDimensions() == 0) {
+        return first.getName().equals(second.getName())
+                && first.isPointer() == second.isPointer()
+                && first.getDimensions() == second.getDimensions();
+    }
+
+    public static boolean isScalar(MiniCType type) {
+        return type != null
+                && !type.isPointer()
+                && type.getDimensions() == 0;
+    }
+
+    public static boolean isNumeric(MiniCType type) {
+        return isScalar(type)
+                && (type.getName().equals("int")
+                || type.getName().equals("char"));
+    }
+
+    public static boolean isConditionType(MiniCType type) {
+        return isScalar(type)
+                && (type.getName().equals("bool")
+                || type.getName().equals("int")
+                || type.getName().equals("char"));
+    }
+
+    public static boolean isIndexType(MiniCType type) {
+        return isNumeric(type);
+    }
+
+    public static boolean canAssign(
+            MiniCType target,
+            MiniCType value
+    ) {
+        if (target == null || value == null) {
+            return false;
+        }
+
+        // No se permite asignar arreglos completos.
+        if (target.getDimensions() > 0 ||
+                value.getDimensions() > 0) {
+            return false;
+        }
+
+        if (sameType(target, value)) {
             return true;
         }
 
-        return false;
+        // Promoción permitida: char -> int.
+        return !target.isPointer()
+                && !value.isPointer()
+                && target.getName().equals("int")
+                && value.getName().equals("char");
     }
 
-    // ¿Este tipo puede usarse como condición en if/while/for?
-    public static boolean isConditionType(MiniCType type) {
-        if (type == null) return false;
-        // Debe ser un tipo simple (sin arreglo) y ser bool, int o char
-        return type.getDimensions() == 0 &&
-                (type.getName().equals("bool")
-                        || type.getName().equals("int")
-                        || type.getName().equals("char"));
+    public static boolean canCompareEquality(
+            MiniCType left,
+            MiniCType right
+    ) {
+        if (left == null || right == null) {
+            return false;
+        }
+
+        if (sameType(left, right)) {
+            return true;
+        }
+
+        return isNumeric(left) && isNumeric(right);
     }
 
-    // ¿Este tipo es un entero válido para usar como índice de arreglo?
-    public static boolean isIndexType(MiniCType type) {
-        if (type == null) return false;
-        return type.getDimensions() == 0 &&
-                (type.getName().equals("int") || type.getName().equals("char"));
+    public static MiniCType arithmeticResult(
+            MiniCType left,
+            MiniCType right
+    ) {
+        if (!isNumeric(left) || !isNumeric(right)) {
+            return null;
+        }
+
+        return new MiniCType("int", false, 0);
     }
 }

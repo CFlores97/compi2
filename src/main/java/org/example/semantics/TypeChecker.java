@@ -1,312 +1,553 @@
 package org.example.semantics;
 
 import org.example.ast.Ast;
-import java.util.HashMap;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-// Recorre el AST y verifica reglas de tipos:
-// asignaciones compatibles, llamadas correctas y returns válidos
 public class TypeChecker {
 
     private final SymbolTable symbolTable;
     private final SemanticErrorReporter errors;
 
-    // Nombre y tipo de retorno de la función que se está revisando
-    private String currentFunctionName = null;
-    private MiniCType currentReturnType = null;
+    private final Deque<Map<String, MiniCType>> scopes =
+            new ArrayDeque<>();
 
-    // Mapa de variables del ámbito actual: nombre -> tipo
-    // Se llena al entrar a cada función para poder verificar asignaciones
-    private Map<String, MiniCType> localVarTypes = new HashMap<>();
+    private String currentFunctionName;
+    private MiniCType currentReturnType;
 
-    public TypeChecker(SymbolTable symbolTable, SemanticErrorReporter errors) {
+    public TypeChecker(
+            SymbolTable symbolTable,
+            SemanticErrorReporter errors
+    ) {
         this.symbolTable = symbolTable;
-        this.errors      = errors;
+        this.errors = errors;
     }
 
-    // Punto de entrada: recibe el nodo raíz del AST
     public void check(Ast.Node node) {
-        if (node instanceof Ast.Program) {
-            checkProgram((Ast.Program) node);
+        if (node instanceof Ast.Program program) {
+            checkProgram(program);
+        } else {
+            error("el TypeChecker espera un Ast.Program como raiz");
         }
     }
 
-    // Recorre todas las funciones del programa
     private void checkProgram(Ast.Program program) {
-        for (Ast.Node child : program.items) {
-            if (child instanceof Ast.Function) {
-                checkFunction((Ast.Function) child);
+        for (Ast.Node item : program.items) {
+            if (item instanceof Ast.Function function) {
+                checkFunction(function);
+            } else if (item instanceof Ast.Declaration) {
+                error("las variables globales aun no estan soportadas "
+                        + "por el TypeChecker de Fase 2");
             }
         }
     }
 
-    // Verifica una función: llena el mapa local, guarda el tipo de retorno
-    // y revisa el cuerpo
-    private void checkFunction(Ast.Function func) {
-        currentFunctionName = func.name;
-        localVarTypes.clear();
+    private void checkFunction(Ast.Function function) {
+        currentFunctionName = function.name;
+        currentReturnType = functionReturnType(function);
 
-        Symbol sym = symbolTable.resolve(func.name);
-        if (sym != null) {
-            currentReturnType = sym.getType();
+        pushScope();
+
+        for (Ast.Param param : function.params) {
+            MiniCType type = declaratorType(param.type, param.name);
+
+            declare(baseName(param.name), type);
         }
 
-        for (Ast.Param param : func.params) {
-            localVarTypes.put(param.name, new MiniCType(param.type, false, 0));
+        // El cuerpo principal comparte scope con parámetros.
+        checkBlock(function.body, false);
+
+        if (currentReturnType != null
+                && !currentReturnType.getName().equals("void")
+                && !containsReturn(function.body)) {
+
+            error("la funcion '" + function.name
+                    + "' debe retornar un valor de tipo '"
+                    + currentReturnType + "'");
         }
 
-        collectDeclarations(func.body);
-
-        // Verificar que la función tenga return si no es void
-        checkReturnPresence(func);
-
-        checkBlock(func.body);
+        popScope();
 
         currentFunctionName = null;
-        currentReturnType   = null;
-        localVarTypes.clear();
+        currentReturnType = null;
     }
 
-    // Recorre el bloque buscando declaraciones para llenar localVarTypes
-    private void collectDeclarations(Ast.Block block) {
-        for (Ast.Node stmt : block.items) {
-            if (stmt instanceof Ast.Declaration) {
-                Ast.Declaration decl = (Ast.Declaration) stmt;
-                for (String name : decl.names) {
-                    // Quitar dimensiones del nombre si tiene arreglo: "a[10]" -> "a"
-                    String cleanName = name.contains("[")
-                            ? name.substring(0, name.indexOf("["))
-                            : name;
-                    localVarTypes.put(cleanName, new MiniCType(decl.type, false, 0));
-                }
-            } else if (stmt instanceof Ast.Block) {
-                collectDeclarations((Ast.Block) stmt);
+    private void checkBlock(
+            Ast.Block block,
+            boolean createScope
+    ) {
+        if (createScope) {
+            pushScope();
+        }
+
+        for (Ast.Node statement : block.items) {
+            checkStatement(statement);
+        }
+
+        if (createScope) {
+            popScope();
+        }
+    }
+
+    private void checkStatement(Ast.Node statement) {
+        if (statement == null) {
+            return;
+        }
+
+        if (statement instanceof Ast.Declaration declaration) {
+            checkDeclaration(declaration);
+
+        } else if (statement instanceof Ast.AssignStmt assign) {
+            checkAssign(assign);
+
+        } else if (statement instanceof Ast.ReturnStmt returnStmt) {
+            checkReturn(returnStmt);
+
+        } else if (statement instanceof Ast.IfStmt ifStmt) {
+            checkIf(ifStmt);
+
+        } else if (statement instanceof Ast.WhileStmt whileStmt) {
+            checkWhile(whileStmt);
+
+        } else if (statement instanceof Ast.ExprStmt exprStmt) {
+            typeOf(exprStmt.expr);
+
+        } else if (statement instanceof Ast.Block block) {
+            checkBlock(block, true);
+
+        } else if (statement instanceof Ast.RawStmt) {
+            error("for y do-while aun no tienen nodos AST propios "
+                    + "para verificacion de tipos");
+        }
+    }
+
+    private void checkDeclaration(Ast.Declaration declaration) {
+        for (String rawName : declaration.names) {
+            String name = baseName(rawName);
+
+            MiniCType type = declaratorType(
+                    declaration.type,
+                    rawName
+            );
+
+            Map<String, MiniCType> currentScope = scopes.peek();
+
+            if (currentScope.containsKey(name)) {
+                // SymbolTableBuilder ya muestra el error con ubicación real.
+                continue;
             }
+
+            currentScope.put(name, type);
         }
     }
 
-    // Revisa cada sentencia dentro de un bloque
-    private void checkBlock(Ast.Block block) {
-        for (Ast.Node stmt : block.items) {
-            checkStatement(stmt);
-        }
-    }
-
-    // Despacha según el tipo de sentencia
-    private void checkStatement(Ast.Node stmt) {
-        if (stmt instanceof Ast.AssignStmt) {
-            checkAssign((Ast.AssignStmt) stmt);
-        } else if (stmt instanceof Ast.ReturnStmt) {
-            checkReturn((Ast.ReturnStmt) stmt);
-        } else if (stmt instanceof Ast.IfStmt) {
-            checkIf((Ast.IfStmt) stmt);
-        } else if (stmt instanceof Ast.WhileStmt) {
-            checkWhile((Ast.WhileStmt) stmt);
-        } else if (stmt instanceof Ast.Block) {
-            checkBlock((Ast.Block) stmt);
-        } else if (stmt instanceof Ast.ExprStmt) {
-            checkExpr(((Ast.ExprStmt) stmt).expr);
-        }
-    }
-
-    // Verifica que la asignación sea entre tipos compatibles
     private void checkAssign(Ast.AssignStmt assign) {
-        MiniCType rightType = checkExpr(assign.value);
+        MiniCType targetType = typeOfAssignable(assign.target);
+        MiniCType valueType = typeOf(assign.value);
 
-        // Quitar índices si es arreglo: "a[0]" -> "a"
-        String targetName = assign.target.contains("[")
-                ? assign.target.substring(0, assign.target.indexOf("["))
-                : assign.target;
+        if (targetType == null || valueType == null) {
+            return;
+        }
 
-        // Busca el tipo en el mapa local primero
-        MiniCType leftType = localVarTypes.get(targetName);
-
-        if (leftType == null) return; // Ya reportado por SymbolTableBuilder
-
-        if (rightType != null && !TypeRules.canAssign(leftType, rightType)) {
-            errors.addError(0, 0,
-                    "no se puede asignar tipo '" + rightType
-                            + "' a variable de tipo '" + leftType + "'");
+        if (!TypeRules.canAssign(targetType, valueType)) {
+            error("no se puede asignar tipo '" + valueType
+                    + "' a destino de tipo '" + targetType + "'");
         }
     }
 
-    // Verifica que el return sea compatible con el tipo de la función
-    private void checkReturn(Ast.ReturnStmt ret) {
-        if (currentReturnType == null) return;
-
-        // Función void con return de valor
-        if (currentReturnType.getName().equals("void") && ret.value != null) {
-            errors.addError(0, 0,
-                    "la funcion '" + currentFunctionName
-                            + "' es void y no debe retornar un valor");
+    private void checkReturn(Ast.ReturnStmt returnStmt) {
+        if (currentReturnType == null) {
             return;
         }
 
-        // Función no void sin return de valor
-        if (!currentReturnType.getName().equals("void") && ret.value == null) {
-            errors.addError(0, 0,
-                    "la funcion '" + currentFunctionName
-                            + "' debe retornar un valor de tipo '" + currentReturnType + "'");
-            return;
-        }
-
-        // Verifica compatibilidad del tipo retornado
-        if (ret.value != null) {
-            MiniCType retType = checkExpr(ret.value);
-            if (retType != null && !TypeRules.canAssign(currentReturnType, retType)) {
-                errors.addError(0, 0,
-                        "la funcion '" + currentFunctionName
-                                + "' debe retornar '" + currentReturnType
-                                + "' pero se retorna '" + retType + "'");
+        if (currentReturnType.getName().equals("void")) {
+            if (returnStmt.value != null) {
+                error("la funcion void '" + currentFunctionName
+                        + "' no debe retornar un valor");
             }
+
+            return;
+        }
+
+        if (returnStmt.value == null) {
+            error("la funcion '" + currentFunctionName
+                    + "' debe retornar un valor de tipo '"
+                    + currentReturnType + "'");
+            return;
+        }
+
+        MiniCType valueType = typeOf(returnStmt.value);
+
+        if (valueType != null &&
+                !TypeRules.canAssign(currentReturnType, valueType)) {
+
+            error("la funcion '" + currentFunctionName
+                    + "' debe retornar '" + currentReturnType
+                    + "' pero retorna '" + valueType + "'");
         }
     }
 
-    // Verifica que la condición del if sea un tipo válido
     private void checkIf(Ast.IfStmt ifStmt) {
-        MiniCType condType = checkExpr(ifStmt.condition);
-        if (condType != null && !TypeRules.isConditionType(condType)) {
-            errors.addError(0, 0,
-                    "la condicion del if debe ser bool, int o char, no '"
-                            + condType + "'");
+        MiniCType conditionType = typeOf(ifStmt.condition);
+
+        if (conditionType != null &&
+                !TypeRules.isConditionType(conditionType)) {
+
+            error("la condicion del if debe ser bool, int o char, no '"
+                    + conditionType + "'");
         }
+
         checkStatement(ifStmt.thenBranch);
-        if (ifStmt.elseBranch != null) checkStatement(ifStmt.elseBranch);
+
+        if (ifStmt.elseBranch != null) {
+            checkStatement(ifStmt.elseBranch);
+        }
     }
 
-    // Verifica que la condición del while sea un tipo válido
     private void checkWhile(Ast.WhileStmt whileStmt) {
-        MiniCType condType = checkExpr(whileStmt.condition);
-        if (condType != null && !TypeRules.isConditionType(condType)) {
-            errors.addError(0, 0,
-                    "la condicion del while debe ser bool, int o char, no '"
-                            + condType + "'");
+        MiniCType conditionType = typeOf(whileStmt.condition);
+
+        if (conditionType != null &&
+                !TypeRules.isConditionType(conditionType)) {
+
+            error("la condicion del while debe ser bool, int o char, no '"
+                    + conditionType + "'");
         }
+
         checkStatement(whileStmt.body);
     }
 
-    // Infiere el tipo de una expresión
-    private MiniCType checkExpr(Ast.Node expr) {
-        if (expr == null) return null;
-
-        if (expr instanceof Ast.Literal) {
-            return inferLiteralType((Ast.Literal) expr);
-        }
-
-        if (expr instanceof Ast.Variable) {
-            String varName = ((Ast.Variable) expr).name;
-            // Busca primero en el mapa local, luego en la tabla global
-            MiniCType localType = localVarTypes.get(varName);
-            if (localType != null) return localType;
-            Symbol sym = symbolTable.resolve(varName);
-            if (sym == null) return null;
-            return sym.getType();
-        }
-
-        if (expr instanceof Ast.BinaryExpr) {
-            return checkBinaryExpr((Ast.BinaryExpr) expr);
-        }
-
-        if (expr instanceof Ast.UnaryExpr) {
-            return checkExpr(((Ast.UnaryExpr) expr).expr);
-        }
-
-        if (expr instanceof Ast.Call) {
-            return checkCallExpr((Ast.Call) expr);
-        }
-
-        // RawExpr no tiene tipo estático claro todavía
-        return null;
-    }
-
-    // Infiere el tipo de un literal por su contenido
-    private MiniCType inferLiteralType(Ast.Literal lit) {
-        String val = lit.value;
-        if (val.equals("true") || val.equals("false"))
-            return new MiniCType("bool", false, 0);
-        if (val.startsWith("'"))
-            return new MiniCType("char", false, 0);
-        if (val.startsWith("\""))
-            return new MiniCType("string", false, 0);
-        return new MiniCType("int", false, 0);
-    }
-
-    // Verifica una expresión binaria y retorna su tipo resultante
-    private MiniCType checkBinaryExpr(Ast.BinaryExpr bin) {
-        MiniCType left  = checkExpr(bin.left);
-        MiniCType right = checkExpr(bin.right);
-
-        if (left == null || right == null) return null;
-
-        // Operadores relacionales, igualdad y lógicos retornan bool
-        if (bin.op.equals("<") || bin.op.equals(">")
-                || bin.op.equals("<=") || bin.op.equals(">=")
-                || bin.op.equals("==") || bin.op.equals("!=")
-                || bin.op.equals("&&") || bin.op.equals("||")) {
-            return new MiniCType("bool", false, 0);
-        }
-
-        // Operadores aritméticos retornan el tipo del lado izquierdo
-        return left;
-    }
-
-    // Verifica una llamada a función: existencia y número de argumentos
-    private MiniCType checkCallExpr(Ast.Call call) {
-        Symbol sym = symbolTable.resolve(call.name);
-        if (sym == null) return null; // Ya reportado por SymbolTableBuilder
-
-        if (!(sym instanceof FunctionSymbol)) {
-            errors.addError(0, 0, "'" + call.name + "' no es una funcion");
+    private MiniCType typeOf(Ast.Expr expr) {
+        if (expr == null) {
             return null;
         }
 
-        FunctionSymbol func = (FunctionSymbol) sym;
-        List<MiniCType> expected = func.getParamTypes();
-        List<Ast.Expr>  actual   = call.args;
-
-        // Verificar número de argumentos
-        if (actual.size() != expected.size()) {
-            errors.addError(0, 0,
-                    "la funcion '" + call.name + "' espera "
-                            + expected.size() + " argumento(s) pero recibio "
-                            + actual.size());
+        if (expr instanceof Ast.Literal literal) {
+            return literalType(literal);
         }
 
-        return func.getType();
+        if (expr instanceof Ast.Variable variable) {
+            return lookup(variable.name);
+        }
+
+        if (expr instanceof Ast.BinaryExpr binary) {
+            return typeOfBinary(binary);
+        }
+
+        if (expr instanceof Ast.UnaryExpr unary) {
+            return typeOfUnary(unary);
+        }
+
+        if (expr instanceof Ast.Call call) {
+            return typeOfCall(call);
+        }
+
+        if (expr instanceof Ast.RawExpr) {
+            error("RawExpr sin tipo; ajusta MiniCASTBuilder");
+            return null;
+        }
+
+        error("expresion no reconocida: "
+                + expr.getClass().getSimpleName());
+
+        return null;
     }
 
-    // Verifica que la función tenga al menos un return si no es void
-    private void checkReturnPresence(Ast.Function func) {
-        if (currentReturnType == null) return;
-        if (currentReturnType.getName().equals("void")) return;
+    private MiniCType typeOfBinary(Ast.BinaryExpr binary) {
+        MiniCType left = typeOf(binary.left);
+        MiniCType right = typeOf(binary.right);
 
-        // Busca si existe al menos un ReturnStmt con valor en el bloque
-        if (!blockHasReturn(func.body)) {
-            errors.addError(0, 0,
-                    "la funcion '" + func.name
-                            + "' debe retornar un valor de tipo '" + currentReturnType
-                            + "' pero no tiene return");
+        if (left == null || right == null) {
+            return null;
         }
+
+        return switch (binary.op) {
+            case "+", "-", "*", "/", "%" -> {
+                MiniCType result =
+                        TypeRules.arithmeticResult(left, right);
+
+                if (result == null) {
+                    error("el operador '" + binary.op
+                            + "' requiere operandos int o char, no '"
+                            + left + "' y '" + right + "'");
+                }
+
+                yield result;
+            }
+
+            case "<", "<=", ">", ">=" -> {
+                if (!TypeRules.isNumeric(left) ||
+                        !TypeRules.isNumeric(right)) {
+
+                    error("el operador relacional '"
+                            + binary.op
+                            + "' requiere operandos int o char");
+                }
+
+                yield new MiniCType("bool", false, 0);
+            }
+
+            case "==", "!=" -> {
+                if (!TypeRules.canCompareEquality(left, right)) {
+                    error("no se pueden comparar '"
+                            + left + "' y '" + right + "'");
+                }
+
+                yield new MiniCType("bool", false, 0);
+            }
+
+            case "&&", "||" -> {
+                if (!TypeRules.isConditionType(left) ||
+                        !TypeRules.isConditionType(right)) {
+
+                    error("el operador logico '"
+                            + binary.op
+                            + "' requiere bool, int o char");
+                }
+
+                yield new MiniCType("bool", false, 0);
+            }
+
+            default -> {
+                error("operador binario no soportado: " + binary.op);
+                yield null;
+            }
+        };
     }
 
-    // Revisa recursivamente si un bloque tiene al menos un return con valor
-    private boolean blockHasReturn(Ast.Block block) {
-        for (Ast.Node stmt : block.items) {
-            if (stmt instanceof Ast.ReturnStmt) {
-                return ((Ast.ReturnStmt) stmt).value != null;
+    private MiniCType typeOfUnary(Ast.UnaryExpr unary) {
+        MiniCType valueType = typeOf(unary.expr);
+
+        if (valueType == null) {
+            return null;
+        }
+
+        return switch (unary.op) {
+            case "-" -> {
+                if (!TypeRules.isNumeric(valueType)) {
+                    error("el operador unario '-' requiere int o char");
+                }
+
+                yield new MiniCType("int", false, 0);
             }
-            if (stmt instanceof Ast.Block) {
-                if (blockHasReturn((Ast.Block) stmt)) return true;
+
+            case "!" -> {
+                if (!TypeRules.isConditionType(valueType)) {
+                    error("el operador unario '!' requiere bool, int o char");
+                }
+
+                yield new MiniCType("bool", false, 0);
             }
-            if (stmt instanceof Ast.IfStmt) {
-                Ast.IfStmt ifStmt = (Ast.IfStmt) stmt;
-                if (ifStmt.thenBranch instanceof Ast.Block
-                        && blockHasReturn((Ast.Block) ifStmt.thenBranch)) return true;
-                if (ifStmt.elseBranch instanceof Ast.Block
-                        && blockHasReturn((Ast.Block) ifStmt.elseBranch)) return true;
+
+            case "*", "&" -> {
+                error("punteros aun no estan implementados "
+                        + "en TypeChecker/IR/MIPS");
+                yield null;
+            }
+
+            default -> {
+                error("operador unario no soportado: " + unary.op);
+                yield null;
+            }
+        };
+    }
+
+    private MiniCType typeOfCall(Ast.Call call) {
+        Symbol symbol = symbolTable.resolve(call.name);
+
+        if (!(symbol instanceof FunctionSymbol function)) {
+            // SymbolTableBuilder ya marca funciones inexistentes.
+            return null;
+        }
+
+        List<MiniCType> expected = function.getParamTypes();
+
+        if (expected.size() != call.args.size()) {
+            error("la funcion '" + call.name
+                    + "' espera " + expected.size()
+                    + " argumento(s) pero recibio "
+                    + call.args.size());
+        }
+
+        int checkedArgs = Math.min(
+                expected.size(),
+                call.args.size()
+        );
+
+        for (int index = 0; index < checkedArgs; index++) {
+            MiniCType actual = typeOf(call.args.get(index));
+            MiniCType required = expected.get(index);
+
+            if (actual != null &&
+                    !TypeRules.canAssign(required, actual)) {
+
+                error("el argumento " + (index + 1)
+                        + " de '" + call.name
+                        + "' debe ser '" + required
+                        + "' pero recibio '" + actual + "'");
             }
         }
+
+        return function.getType();
+    }
+
+    private MiniCType typeOfAssignable(String target) {
+        if (target.startsWith("*")) {
+            error("asignacion mediante punteros no implementada: "
+                    + target);
+            return null;
+        }
+
+        String base = baseName(target);
+
+        MiniCType declared = lookup(base);
+
+        if (declared == null) {
+            return null;
+        }
+
+        int indexes = countIndexes(target);
+
+        if (indexes == 0) {
+            return declared;
+        }
+
+        if (declared.getDimensions() < indexes) {
+            error("se usan demasiados indices para '" + base + "'");
+            return null;
+        }
+
+        return new MiniCType(
+                declared.getName(),
+                declared.isPointer(),
+                declared.getDimensions() - indexes
+        );
+    }
+
+    private MiniCType literalType(Ast.Literal literal) {
+        String value = literal.value;
+
+        if ("true".equals(value) || "false".equals(value)) {
+            return new MiniCType("bool", false, 0);
+        }
+
+        if (value.startsWith("'")) {
+            return new MiniCType("char", false, 0);
+        }
+
+        if (value.startsWith("\"")) {
+            return new MiniCType("string", false, 0);
+        }
+
+        return new MiniCType("int", false, 0);
+    }
+
+    private MiniCType functionReturnType(Ast.Function function) {
+        Symbol symbol = symbolTable.resolve(function.name);
+
+        if (symbol != null) {
+            return symbol.getType();
+        }
+
+        return new MiniCType(function.returnType, false, 0);
+    }
+
+    private void pushScope() {
+        scopes.push(new LinkedHashMap<>());
+    }
+
+    private void popScope() {
+        scopes.pop();
+    }
+
+    private void declare(String name, MiniCType type) {
+        scopes.peek().put(name, type);
+    }
+
+    private MiniCType lookup(String name) {
+        for (Map<String, MiniCType> scope : scopes) {
+            MiniCType type = scope.get(name);
+
+            if (type != null) {
+                return type;
+            }
+        }
+
+        Symbol globalSymbol = symbolTable.resolve(name);
+
+        return globalSymbol == null
+                ? null
+                : globalSymbol.getType();
+    }
+
+    private boolean containsReturn(Ast.Node node) {
+        if (node instanceof Ast.ReturnStmt) {
+            return true;
+        }
+
+        if (node instanceof Ast.Block block) {
+            for (Ast.Node item : block.items) {
+                if (containsReturn(item)) {
+                    return true;
+                }
+            }
+        }
+
+        if (node instanceof Ast.IfStmt ifStmt) {
+            return containsReturn(ifStmt.thenBranch)
+                    || (ifStmt.elseBranch != null
+                    && containsReturn(ifStmt.elseBranch));
+        }
+
+        if (node instanceof Ast.WhileStmt whileStmt) {
+            return containsReturn(whileStmt.body);
+        }
+
         return false;
+    }
+
+    private MiniCType declaratorType(
+            String baseType,
+            String declarator
+    ) {
+        boolean pointer = declarator.startsWith("*");
+        int dimensions = countIndexes(declarator);
+
+        return new MiniCType(baseType, pointer, dimensions);
+    }
+
+    private String baseName(String declarator) {
+        String name = declarator;
+
+        while (name.startsWith("*")) {
+            name = name.substring(1);
+        }
+
+        int bracket = name.indexOf('[');
+
+        return bracket >= 0
+                ? name.substring(0, bracket)
+                : name;
+    }
+
+    private int countIndexes(String declarator) {
+        int count = 0;
+
+        for (int index = 0; index < declarator.length(); index++) {
+            if (declarator.charAt(index) == '[') {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private void error(String message) {
+        // El AST actual aún no conserva línea/columna.
+        errors.addError(0, 0, message);
     }
 }

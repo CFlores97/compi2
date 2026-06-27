@@ -17,6 +17,7 @@ public class SymbolTable {
     public SymbolTable() {
         // El ámbito global siempre existe desde el inicio
         allScopes.add(globalScope);
+        registerRuntimeFunctions();
     }
 
     public Scope getCurrentScope() { return currentScope; }
@@ -42,6 +43,56 @@ public class SymbolTable {
     // Busca un símbolo desde el ámbito actual hacia afuera
     public Symbol resolve(String name) {
         return currentScope.resolve(name);
+    }
+
+    private void registerRuntimeFunctions() {
+        globalScope.define(new FunctionSymbol(
+                "print_int",
+                new MiniCType("void", false, 0),
+                List.of(new MiniCType("int", false, 0)),
+                0,
+                0
+        ));
+
+        globalScope.define(new FunctionSymbol(
+                "print_char",
+                new MiniCType("void", false, 0),
+                List.of(new MiniCType("char", false, 0)),
+                0,
+                0
+        ));
+
+        globalScope.define(new FunctionSymbol(
+                "print_bool",
+                new MiniCType("void", false, 0),
+                List.of(new MiniCType("bool", false, 0)),
+                0,
+                0
+        ));
+
+        globalScope.define(new FunctionSymbol(
+                "println",
+                new MiniCType("void", false, 0),
+                List.of(),
+                0,
+                0
+        ));
+
+        globalScope.define(new FunctionSymbol(
+                "read_int",
+                new MiniCType("int", false, 0),
+                List.of(),
+                0,
+                0
+        ));
+
+        globalScope.define(new FunctionSymbol(
+                "read_char",
+                new MiniCType("char", false, 0),
+                List.of(),
+                0,
+                0
+        ));
     }
 
     // Imprime todos los ámbitos y sus símbolos

@@ -139,12 +139,15 @@ public class MiniCASTBuilder extends MiniCBaseVisitor<Ast.Node> {
 
     @Override
     public Ast.Node visitCallExpr(MiniCParser.CallExprContext ctx) {
-
         String name = ctx.Identifier().getText();
+
         List<Ast.Expr> args = new ArrayList<>();
+
         for (MiniCParser.ExprContext exprCtx : ctx.expr()) {
-            args.add(new Ast.RawExpr(exprCtx.getText()));
+            Ast.Node argNode = visit(exprCtx);
+            args.add(toExpr(argNode, exprCtx));
         }
+
         return new Ast.Call(name, args);
     }
 
