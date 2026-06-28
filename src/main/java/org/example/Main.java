@@ -71,6 +71,7 @@ public final class Main {
             SymbolTableBuilder symbolBuilder = new SymbolTableBuilder(symbolTable, semanticErrors);
 
 
+            symbolBuilder.registerBuiltins();
             symbolBuilder.collectFunctionSignatures((MiniCParser.ProgramContext) tree);
             ParseTreeWalker.DEFAULT.walk(symbolBuilder, tree);
 

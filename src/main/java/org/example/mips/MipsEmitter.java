@@ -21,7 +21,12 @@ public final class MipsEmitter {
     public String emit(IRProgram program) {
         StringBuilder sb = new StringBuilder();
         emitData(program, sb);
-        sb.append("\n.text\n.globl main\n\n");
+        sb.append("\n.text\n");
+        for (IRFunction current : program.functions) {
+            sb.append(".globl ").append(current.name).append("\n");
+        }
+        sb.append("\n");
+        sb.append("  j main\n  nop\n\n");
         boolean mainFound = false;
         for (IRFunction current : program.functions) {
             if ("main".equals(current.name)) mainFound = true;
@@ -161,7 +166,10 @@ public final class MipsEmitter {
         switch (operand.kind) {
             case CONST -> sb.append("  li ").append(register).append(", ").append(operand.value).append("\n");
             case STRING -> sb.append("  la ").append(register).append(", ").append(operand.value).append("\n");
-            case GLOBAL -> sb.append("  lw ").append(register).append(", ").append(operand.value).append("\n");
+            case GLOBAL -> {
+                sb.append("  la $t8, ").append(operand.value).append("\n");
+                sb.append("  lw ").append(register).append(", 0($t8)\n");
+            }
             case TEMP, VAR -> sb.append("  lw ").append(register).append(", ").append(frame.offsetOf(operand.value)).append("($fp)\n");
             default -> throw new IllegalStateException("No se puede cargar " + operand);
         }
@@ -170,7 +178,10 @@ public final class MipsEmitter {
     private void store(Operand operand, String register, StringBuilder sb) {
         if (operand == null) return;
         switch (operand.kind) {
-            case GLOBAL -> sb.append("  sw ").append(register).append(", ").append(operand.value).append("\n");
+            case GLOBAL -> {
+                sb.append("  la $t8, ").append(operand.value).append("\n");
+                sb.append("  sw ").append(register).append(", 0($t8)\n");
+            }
             case TEMP, VAR -> sb.append("  sw ").append(register).append(", ").append(frame.offsetOf(operand.value)).append("($fp)\n");
             default -> throw new IllegalStateException("No se puede guardar en " + operand);
         }

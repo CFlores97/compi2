@@ -128,4 +128,26 @@ public final class SymbolTableBuilder extends MiniCBaseListener {
         declarator.IntegerConst().forEach(node -> dimensions.add(Integer.parseInt(node.getText())));
         return new MiniCType(baseType, pointers, dimensions);
     }
+
+    // Registra las funciones del runtime en el ámbito global
+// para que el TypeChecker no las marque como no declaradas
+    public void registerBuiltins() {
+        // Funciones void del runtime
+        String[] voidFuncs = { "println", "print_int", "print_char", "print_bool", "print_str", "read_str" };
+        for (String name : voidFuncs) {
+            symbolTable.defineGlobal(new FunctionSymbol(name,
+                    MiniCType.scalar("void"),
+                    new ArrayList<>(), 0, 0));
+        }
+
+        // Funciones que retornan int
+        symbolTable.defineGlobal(new FunctionSymbol("read_int",
+                MiniCType.scalar("int"),
+                new ArrayList<>(), 0, 0));
+
+        // Funciones que retornan char
+        symbolTable.defineGlobal(new FunctionSymbol("read_char",
+                MiniCType.scalar("char"),
+                new ArrayList<>(), 0, 0));
+    }
 }
